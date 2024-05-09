@@ -1,4 +1,5 @@
 """Local support for Mill wifi-enabled home heaters."""
+
 import json
 import logging
 from enum import Enum
@@ -30,13 +31,16 @@ class OperationMode(Enum):
 class Mill:
     """Mill data handler."""
 
-    def __init__(self, device_ip: str, websession: ClientSession, timeout_seconds: int = 15) -> None:
+    def __init__(
+        self, device_ip: str, websession: ClientSession, timeout_seconds: int = 15
+    ) -> None:
         """Init Mill data handler."""
         self.device_ip = device_ip.replace("http://", "").replace("/", "").strip()
         self.websession = websession
         self.url = "http://" + self.device_ip
         self._timeout_seconds = timeout_seconds
         self._status = {}
+        self._configured_operationmode = {}
 
     @property
     def version(self) -> str:
@@ -53,6 +57,11 @@ class Mill:
         """Return heater MAC address."""
         return self._status.get("mac_address")
 
+    @property
+    def configured_operationmode(self) -> str:
+        """Return configured operation mode."""
+        return self._configured_operationmode.get("mode", "")
+
     async def set_target_temperature(self, target_temperature: float) -> None:
         """Set target temperature."""
         _LOGGER.debug("Setting target temperature to: '%s'", target_temperature)
@@ -61,8 +70,15 @@ class Mill:
             payload={
                 "type": "Normal",
                 "value": target_temperature,
-            }
+            },
         )
+
+    async def set_operation_mode_on(self) -> None:
+        """Turn on heater with the last set operation mode"""
+        if self.configured_operationmode is None:
+            await self._set_operation_mode(OperationMode.CONTROL_INDIVIDUALLY)
+        else:
+            await self._set_operation_mode(OperationMode[self.configured_operationmode])
 
     async def set_operation_mode_control_individually(self) -> None:
         """Set operation mode to 'control individually'."""
@@ -70,16 +86,25 @@ class Mill:
 
     async def set_operation_mode_off(self) -> None:
         """Set operation mode to 'off'."""
+        await self.get_configured_operationmode()
         await self._set_operation_mode(OperationMode.OFF)
 
     async def connect(self) -> dict:
         """Connect to the device and return its status."""
+        await self.get_configured_operationmode()
         return await self.get_status()
 
     async def get_status(self) -> dict:
         """Get status summary of the device."""
         self._status = await self._get_request("status")
         return self._status
+
+    async def get_configured_operationmode(self) -> dict:
+        """Get operation mode of the device."""
+        mode_request = await self._get_request("operation-mode")
+        if mode_request.get("mode") != OperationMode.OFF.value:
+            self._configured_operationmode = mode_request
+            return self._configured_operationmode
 
     async def fetch_heater_and_sensor_data(self) -> dict:
         """Get current heater state and control status."""
@@ -94,8 +119,7 @@ class Mill:
         """HTTP POST request to Mill Local Api."""
         async with timeout(self._timeout_seconds):
             async with self.websession.post(
-                    url=f"{self.url}/{command}",
-                    data=json.dumps(payload)
+                url=f"{self.url}/{command}", data=json.dumps(payload)
             ) as response:
                 # Since body is not available when using raise_for_status=True, we use raise_for_status()
                 json_response = await response.json()
@@ -112,16 +136,16 @@ class Mill:
                         command,
                         response.status,
                         response.reason,
-                        json_response.get("status", "")  # Guard in case status property is missing in body
+                        json_response.get(
+                            "status", ""
+                        ),  # Guard in case status property is missing in body
                     )
                     raise
 
     async def _get_request(self, command: str) -> Union[dict, None]:
         """HTTP GET request to Mill Local Api."""
         async with timeout(self._timeout_seconds):
-            async with self.websession.get(
-                    url=f"{self.url}/{command}"
-            ) as response:
+            async with self.websession.get(url=f"{self.url}/{command}") as response:
                 # Since body is not available when using raise_for_status=True, we use raise_for_status()
                 json_response = await response.json()
 
@@ -138,6 +162,8 @@ class Mill:
                         command,
                         response.status,
                         response.reason,
-                        json_response.get("status", "")  # Guard in case status property is missing in body
+                        json_response.get(
+                            "status", ""
+                        ),  # Guard in case status property is missing in body
                     )
                     raise
