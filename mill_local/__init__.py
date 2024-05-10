@@ -87,7 +87,7 @@ class Mill:
         if self.configured_operationmode is None:
             await self._set_operation_mode(OperationMode.CONTROL_INDIVIDUALLY)
         else:
-            await self._set_operation_mode(OperationMode[self.configured_operationmode])
+            await self._set_operation_mode(OperationMode(self.configured_operationmode))
 
     async def set_operation_mode_control_individually(self) -> None:
         """Set operation mode to 'control individually'."""
@@ -95,12 +95,12 @@ class Mill:
 
     async def set_operation_mode_off(self) -> None:
         """Set operation mode to 'off'."""
-        await self.get_configured_operationmode()
+        await self._get_configured_operationmode()
         await self._set_operation_mode(OperationMode.OFF)
 
     async def connect(self) -> dict:
         """Connect to the device and return its status."""
-        await self.get_configured_operationmode()
+        await self._get_configured_operationmode()
         return await self.get_status()
 
     async def get_status(self) -> dict:
@@ -108,16 +108,16 @@ class Mill:
         self._status = await self._get_request("status")
         return self._status
 
-    async def get_configured_operationmode(self) -> dict:
+    async def fetch_heater_and_sensor_data(self) -> dict:
+        """Get current heater state and control status."""
+        return await self._get_request("control-status")
+
+    async def _get_configured_operationmode(self) -> dict:
         """Get operation mode of the device."""
         mode_request = await self._get_request("operation-mode")
         if mode_request.get("mode") != OperationMode.OFF.value:
             self._configured_operationmode = mode_request
             return self._configured_operationmode
-
-    async def fetch_heater_and_sensor_data(self) -> dict:
-        """Get current heater state and control status."""
-        return await self._get_request("control-status")
 
     async def _set_operation_mode(self, mode: OperationMode) -> None:
         """Set heater operation mode."""
@@ -188,7 +188,7 @@ class MillOilHeater(Mill):
             command="oil-heater-power",
             payload={
                 "heating_level_percentage": power.value,
-            }
+            },
         )
 
     async def fetch_heater_power_data(self) -> dict:
