@@ -46,6 +46,7 @@ class Mill:
         self.url = "http://" + self.device_ip
         self._timeout_seconds = timeout_seconds
         self._status = {}
+        self._operation_mode = None
 
     @property
     def version(self) -> str:
@@ -83,8 +84,10 @@ class Mill:
 
     async def connect(self) -> dict:
         """Connect to the device and return its status."""
-        return await self.get_status()
-
+        status = await self.get_status()
+        self._operation_mode = await self.get_operation_mode()
+        return status
+    
     async def get_status(self) -> dict:
         """Get status summary of the device."""
         self._status = await self._get_request("status")
@@ -93,6 +96,11 @@ class Mill:
     async def fetch_heater_and_sensor_data(self) -> dict:
         """Get current heater state and control status."""
         return await self._get_request("control-status")
+    
+    async def get_operation_mode(self) -> str:
+        """Get heater operation mode."""
+        data = await self.fetch_heater_and_sensor_data()
+        return data.get("operation_mode", "Unknown") 
 
     async def _set_operation_mode(self, mode: OperationMode) -> None:
         """Set heater operation mode."""
