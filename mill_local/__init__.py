@@ -73,10 +73,24 @@ class Mill:
                 "value": target_temperature,
             }
         )
+    async def set_operation_mode_on(self) -> None:
+        """Set operation mode to last active operation mode or control individually if no previous active operation mode."""
+        if self._operation_mode:
+            await self._set_operation_mode(OperationMode(self._operation_mode))
+        else:
+            await self.set_operation_mode_control_individually()
 
     async def set_operation_mode_control_individually(self) -> None:
         """Set operation mode to 'control individually'."""
         await self._set_operation_mode(OperationMode.CONTROL_INDIVIDUALLY)
+
+    async def set_operation_mode_weekly_program(self) -> None:
+        """Set operation mode to 'control individually'."""
+        await self._set_operation_mode(OperationMode.WEEKLY_PROGRAM)
+
+    async def set_operation_mode_independent_device(self) -> None:
+        """Set operation mode to 'control individually'."""
+        await self._set_operation_mode(OperationMode.INDEPENDENT_DEVICE)
 
     async def set_operation_mode_off(self) -> None:
         """Set operation mode to 'off'."""
@@ -87,7 +101,7 @@ class Mill:
         status = await self.get_status()
         self._operation_mode = await self.get_operation_mode()
         return status
-    
+
     async def get_status(self) -> dict:
         """Get status summary of the device."""
         self._status = await self._get_request("status")
@@ -96,7 +110,7 @@ class Mill:
     async def fetch_heater_and_sensor_data(self) -> dict:
         """Get current heater state and control status."""
         return await self._get_request("control-status")
-    
+
     async def get_operation_mode(self) -> str:
         """Get heater operation mode."""
         data = await self.fetch_heater_and_sensor_data()
